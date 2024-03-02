@@ -106,83 +106,87 @@ ascii_names = {
     126: "~ Tilde",
 }
 
-parser = argparse.ArgumentParser(
-                    prog='daisy font converter',
-                    description='Converts PixelForge .pxf files into a suitable .c file for libdaisy oled displays',
-                    epilog='author: atoav')
 
-parser.add_argument('-i', '--input', type=argparse.FileType('r'), required=True, help="PixelForge .pxf file to convert")
-parser.add_argument('-o', '--output', type=argparse.FileType('w'), help="path for output (printed to stdout otherwise)")
-parser.add_argument('--width', type=int, required=True, help="Width of the Font (including space between characters)")
-parser.add_argument('--height', type=int, required=True, help="Height of the Font (including space between lines)")
-parser.add_argument('--name', help="Optional name (only use characters permitted in a C++ variable name)")
+def main():
+    parser = argparse.ArgumentParser(
+                        prog='daisy font converter',
+                        description='Converts PixelForge .pxf files into a suitable .c file for libdaisy oled displays',
+                        epilog='author: atoav')
 
-args = parser.parse_args()
-if args.name is not None:
-    args.name = args.name.replace(" ", "_").replace("*", "_")
+    parser.add_argument('-i', '--input', type=argparse.FileType('r'), required=True, help="PixelForge .pxf file to convert")
+    parser.add_argument('-o', '--output', type=argparse.FileType('w'), help="path for output (printed to stdout otherwise)")
+    parser.add_argument('--width', type=int, required=True, help="Width of the Font (including space between characters)")
+    parser.add_argument('--height', type=int, required=True, help="Height of the Font (including space between lines)")
+    parser.add_argument('--name', help="Optional name (only use characters permitted in a C++ variable name)")
 
-glyphs = {}
+    args = parser.parse_args()
+    if args.name is not None:
+        args.name = args.name.replace(" ", "_").replace("*", "_")
 
-with args.input as f:
-    lines = f.readlines()
-    glyph = None
-    for line in lines:
-        if line.startswith("format_version:"):
-            version = line.split(": ")[1].strip()
-            if version != "1.0":
-                print(f"Warning: This is a PixelForge Font file with version {version}, this script was made for version 1.0, check your output! ")
-        if match := re.match(r'^\t(\d*):', line):
-            glyph = int(match.group(1))
-        elif match := re.match(r'^\t*pixels: (\d* \d*,\s)*', line):
-            values = line.split(": ")[1].split(",")
-            values = [v.strip() for v in values]
-            values = [(int(v.split(" ")[0]), int(v.split(" ")[1])) for v in values if v.strip() != ""]
-            glyphs[glyph] = values
+    glyphs = {}
+
+    with args.input as f:
+        lines = f.readlines()
+        glyph = None
+        for line in lines:
+            if line.startswith("format_version:"):
+                version = line.split(": ")[1].strip()
+                if version != "1.0":
+                    print(f"Warning: This is a PixelForge Font file with version {version}, this script was made for version 1.0, check your output! ")
+            if match := re.match(r'^\t(\d*):', line):
+                glyph = int(match.group(1))
+            elif match := re.match(r'^\t*pixels: (\d* \d*,\s)*', line):
+                values = line.split(": ")[1].split(",")
+                values = [v.strip() for v in values]
+                values = [(int(v.split(" ")[0]), int(v.split(" ")[1])) for v in values if v.strip() != ""]
+                glyphs[glyph] = values
 
 
-# Pixelforge does not create space characters, so lets do it ourselves
-space = '0x0000, ' * args.height
-space += f'// {ascii_names[32]}'
-output = {
-    32: space
-}
+    # Pixelforge does not create space characters, so lets do it ourselves
+    space = '0x0000, ' * args.height
+    space += f'// {ascii_names[32]}'
+    output = {
+        32: space
+    }
 
-# Generate the C++ variables
-for glyph, values in glyphs.items():
-    output[glyph] = ""
-    for y in range(args.height):
-        y = args.height - 1 - y
-        x_values = [v[0] for v in values if v[1] == y]
-        bin_str = ""
-        # We are using uint16_t so use 16 bits..
-        for x in range(16):
-            if x in x_values:
-                bin_str += "1"
-            else:
-                bin_str += "0"
-        val = int(bin_str, 2)
-        hex_val = f'{val:04x}'
-        output[glyph] += f'0x{str(hex_val).upper()}, '
-    output[glyph] += f'// {ascii_names[glyph]}'
+    # Generate the C++ variables
+    for glyph, values in glyphs.items():
+        output[glyph] = ""
+        for y in range(args.height):
+            y = args.height - 1 - y
+            x_values = [v[0] for v in values if v[1] == y]
+            bin_str = ""
+            # We are using uint16_t so use 16 bits..
+            for x in range(16):
+                if x in x_values:
+                    bin_str += "1"
+                else:
+                    bin_str += "0"
+            val = int(bin_str, 2)
+            hex_val = f'{val:04x}'
+            output[glyph] += f'0x{str(hex_val).upper()}, '
+        output[glyph] += f'// {ascii_names[glyph]}'
 
-name = 'Font' if args.name is None else f'Font{args.name}'
+    name = 'Font' if args.name is None else f'Font{args.name}'
 
-out_str = f"static const uint16_t {name}{args.width}x{args.height}[] = {{\n"
+    out_str = f"static const uint16_t {name}{args.width}x{args.height}[] = {{\n"
 
-for _glyph, text in output.items():
-    out_str += f'    {text}\n'
-out_str += '};\n\n'
+    for _glyph, text in output.items():
+        out_str += f'    {text}\n'
+    out_str += '};\n\n'
 
-out_str += f'FontDef {name}_{args.width}x{args.height} = {{{args.width}, {args.height}, {name}{args.width}x{args.height}}};\n\n'
+    out_str += f'FontDef {name}_{args.width}x{args.height} = {{{args.width}, {args.height}, {name}{args.width}x{args.height}}};\n\n'
 
-if args.output is None:
-    print(out_str)
-    print("// Add this to oled_fonts.h:")
-    print(f"// extern FontDef {name}_{args.width}x{args.height}")
-else:
-    with args.output as f:
-        f.write(out_str)
-    print(f"Written output\n")
-    print("Don't forget to add this to oled_fonts.h:")
-    print(f"extern FontDef {name}_{args.width}x{args.height}")
-            
+    if args.output is None:
+        print(out_str)
+        print("// Add this to oled_fonts.h:")
+        print(f"// extern FontDef {name}_{args.width}x{args.height}")
+    else:
+        with args.output as f:
+            f.write(out_str)
+        print(f"Written output\n")
+        print("Don't forget to add this to oled_fonts.h:")
+        print(f"extern FontDef {name}_{args.width}x{args.height}")
+                
+if __name__ == "__main__":
+    main()
