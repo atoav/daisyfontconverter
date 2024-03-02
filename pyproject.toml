@@ -1,0 +1,14 @@
+[tool.poetry]
+name = "daisyfontconverter"
+version = "0.1.0"
+description = "A small command line tool to convert PixelForge font files into c-arrays for the electrosmith daisy"
+authors = ["atoav <dh@atoav.com>"]
+readme = "README.md"
+
+[tool.poetry.dependencies]
+python = "^3.10"
+
+
+[build-system]
+requires = ["poetry-core"]
+build-backend = "poetry.core.masonry.api"
